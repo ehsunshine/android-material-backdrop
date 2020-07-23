@@ -1,0 +1,4 @@
+<resources>
+    <dimen name="fab_margin">16dp</dimen>
+    <dimen name="shr_product_grid_reveal_height">200dp</dimen>
+</resources>

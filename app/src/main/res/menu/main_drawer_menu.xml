@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/itemLogs"
+        android:title="Send logs" />
+    <item
+        android:id="@+id/itemRequestPermission"
+        android:title="Permissions" />
+    <item
+        android:id="@+id/itemLogOut"
+        android:title="Log out" />
+</menu>

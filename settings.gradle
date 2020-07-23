@@ -1,0 +1,2 @@
+include ':app', ':backdrop'
+rootProject.name = "KopNu"

@@ -1,0 +1,12 @@
+<resources>
+
+    <style name="Widget.AppTheme.Toolbar" parent="Widget.MaterialComponents.Toolbar.Primary">
+        <item name="materialThemeOverlay">@style/ThemeOverlay.AppTheme.Toolbar</item>
+        <item name="popupTheme">@style/ThemeOverlay.AppCompat.Light</item>
+    </style>
+
+    <style name="ThemeOverlay.AppTheme.Toolbar" parent="">
+        <item name="colorOnPrimary">@color/colorToolbarOnPrimaryLight</item>
+    </style>
+
+</resources>
