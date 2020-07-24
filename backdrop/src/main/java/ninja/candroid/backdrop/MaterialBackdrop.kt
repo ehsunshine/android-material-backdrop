@@ -2,9 +2,9 @@ package ninja.candroid.backdrop
 
 import android.animation.ObjectAnimator
 import android.animation.StateListAnimator
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Context
-import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.util.DisplayMetrics
 import android.view.View
@@ -15,7 +15,6 @@ import android.view.animation.AlphaAnimation
 import android.view.animation.AnimationSet
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
-import android.widget.ImageView
 import androidx.appcompat.widget.Toolbar
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.children
@@ -31,28 +30,28 @@ import com.google.android.material.textview.MaterialTextView
 import ninja.candroid.backdrop.extensions.toolbar
 import ninja.candroid.backdrop.extensions.topLevelDestinations
 
-
 class MaterialBackdrop @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
+    private var navController: NavController? = null
     private val animateHeight: Int
     private var backdropShown = false
-    private val openIcon: Drawable?
-    private val closeIcon: Drawable?
     private var navigationMenuId: Int = View.generateViewId()
-    private val view = MaterialTextView(context)
+    private val navigationIcon = BackdropStateDrawable(context)
     private val backLayer = FrameLayout(context)
     private val frontLayer = MaterialCardView(context)
+
+    private val topLevelDestination: Boolean
+        get() = topLevelDestinations.isNotEmpty() &&
+                !topLevelDestinations.contains(navController?.currentDestination?.id)
 
     init {
         val displayMetrics = DisplayMetrics()
         (context as Activity).windowManager.defaultDisplay.getMetrics(displayMetrics)
         animateHeight = displayMetrics.heightPixels
-        openIcon = context.getDrawable(R.drawable.ic_menu)
-        closeIcon = context.getDrawable(R.drawable.ic_close)
     }
 
     override fun onAttachedToWindow() {
@@ -90,7 +89,6 @@ class MaterialBackdrop @JvmOverloads constructor(
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
             backLayer.id = View.generateViewId()
-            backLayer.setBackgroundColor(R.attr.colorError)
 
             (backLayer.layoutParams as? CoordinatorLayout.LayoutParams)?.behavior =
                 ScrollingViewBehavior()
@@ -100,53 +98,60 @@ class MaterialBackdrop @JvmOverloads constructor(
 
         this.requestLayout()
 
-        val navController = findNavController(this)
+        navController = findNavController(this)
 
         toolbar = toolbar ?: findToolbar()
 
         setAppBarElevationToZero()
 
         toolbar?.setNavigationOnClickListener {
-            if (topLevelDestinations.isNotEmpty() && !topLevelDestinations.contains(navController?.currentDestination?.id)) {
+            if (!backdropShown && topLevelDestination) {
                 navController?.navigateUp()
             } else {
                 backdropShown = !backdropShown
 
-                updateIcon(it)
-
                 if (backdropShown) {
                     addBackLayer { backViewHeight ->
-                        ObjectAnimator.ofFloat(frontLayer, "translationY", backViewHeight.toFloat())
-                            .apply {
-                                removeAllListeners()
-                                end()
-                                cancel()
-                                duration = ANIMATION_SPEED
-                                addListener(onSlideAnimationEnded())
-                                start()
-                            }
+                        slide(backViewHeight)
                     }
                 } else {
-                    ObjectAnimator.ofFloat(frontLayer, "translationY", 0F)
-                        .apply {
-                            removeAllListeners()
-                            end()
-                            cancel()
-                            duration = ANIMATION_SPEED
-                            addListener(onSlideAnimationEnded())
-                            start()
-                        }
+                    slide(0)
                 }
 
                 fadeBackLayer(if (backdropShown) FadeType.IN else FadeType.OUT)
-
             }
         }
     }
 
+    override fun onViewRemoved(child: View?) {
+        super.onViewRemoved(child)
+        toolbar = null
+    }
+
+    @JvmOverloads
+    fun open(view: View? = null, animation: Boolean = true) {
+        backdropShown = true
+        addBackLayer(view) { backViewHeight ->
+            slide(backViewHeight, animation)
+        }
+    }
+
+    private fun slide(position: Int, animation: Boolean = true) {
+        ObjectAnimator.ofFloat(frontLayer, "translationY", position.toFloat())
+            .apply {
+                removeAllListeners()
+                end()
+                cancel()
+                duration = ANIMATION_SPEED
+                addListener(onSlideAnimationEnded())
+                if (animation) start()
+            }
+        updateIcon(animation)
+    }
+
     private fun setAppBarElevationToZero() {
         val stateListAnimator = StateListAnimator()
-        stateListAnimator.addState(IntArray(0), ObjectAnimator.ofFloat(view, "elevation", 0f))
+        stateListAnimator.addState(IntArray(0), ObjectAnimator.ofFloat(toolbar, "elevation", 0f))
         (toolbar?.parent as? AppBarLayout)?.stateListAnimator = stateListAnimator
     }
 
@@ -160,24 +165,42 @@ class MaterialBackdrop @JvmOverloads constructor(
         }
     }
 
-    private fun updateIcon(view: View) {
-        if (openIcon != null && closeIcon != null) {
-            if (view !is ImageView) {
-                throw IllegalArgumentException("updateIcon() must be called on an ImageView")
+    private fun updateIcon(animation: Boolean) {
+        toolbar?.navigationIcon = navigationIcon
+        if (navigationIcon.progress == 1f && backdropShown) return
+        navigationIcon.shape = if (topLevelDestination) {
+            BackdropStateDrawable.Shape.ARROW_CLOSE
+        } else {
+           BackdropStateDrawable.Shape.HAMBURGER_CLOSE
+        }
+
+        val (start, end) = if (backdropShown) 0F to 1F else 1F to 0F
+        ValueAnimator.ofFloat(start, end).apply {
+            duration = NAV_ICON_ANIMATION_SPEED
+            addUpdateListener {
+                navigationIcon.progress = it.animatedValue.toString().toFloat()
             }
-            if (backdropShown) {
-                view.setImageDrawable(closeIcon)
-            } else {
-                view.setImageDrawable(openIcon)
-            }
+            if (animation) start() else navigationIcon.progress = end
         }
     }
 
-    private fun addBackLayer(onHeightMeasured: (height: Int) -> Unit) {
-        view.id = navigationMenuId
-        view.text = "Hello Backdrop!"
-        view.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 400)
-        backLayer.addView(view, 0)
+    private fun addBackLayer(view: View? = null, onHeightMeasured: (height: Int) -> Unit) {
+        backLayer.clearAnimation()
+        backLayer.removeAllViews()
+        val backLayerChild = view
+            ?: MaterialTextView(context).apply {
+                id = navigationMenuId
+                text = "Navigation menu items goes here!"
+                val params = LayoutParams(
+                    LayoutParams.MATCH_PARENT,
+                    400
+                )
+                val margin = 44
+                params.setMargins(margin, margin, margin, margin)
+                layoutParams = params
+            }
+
+        backLayer.addView(backLayerChild, 0)
         backLayer.viewTreeObserver
             .addOnGlobalLayoutListener(object : OnGlobalLayoutListener {
                 override fun onGlobalLayout() {
@@ -264,6 +287,7 @@ class MaterialBackdrop @JvmOverloads constructor(
 
     companion object {
         private const val ANIMATION_SPEED = 150L
+        private const val NAV_ICON_ANIMATION_SPEED = 300L
     }
 
     private enum class FadeType { IN, OUT }
