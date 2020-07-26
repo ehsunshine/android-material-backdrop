@@ -5,8 +5,10 @@ import android.animation.StateListAnimator
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Context
+import android.content.res.Resources
 import android.util.AttributeSet
 import android.util.DisplayMetrics
+import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver.OnGlobalLayoutListener
@@ -15,6 +17,9 @@ import android.view.animation.AlphaAnimation
 import android.view.animation.AnimationSet
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import androidx.annotation.ColorInt
 import androidx.appcompat.widget.Toolbar
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.children
@@ -43,6 +48,9 @@ class MaterialBackdrop @JvmOverloads constructor(
     private val navigationIcon = BackdropStateDrawable(context)
     private val backLayer = FrameLayout(context)
     private val frontLayer = MaterialCardView(context)
+    private var subHeader = View(context)
+
+    var showSubHeader: Boolean = true
 
     private val topLevelDestination: Boolean
         get() = topLevelDestinations.isNotEmpty() &&
@@ -56,45 +64,9 @@ class MaterialBackdrop @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        if (frontLayer.parent == null) {
-            frontLayer.layoutParams = LayoutParams(
-                LayoutParams.MATCH_PARENT,
-                LayoutParams.MATCH_PARENT
-            )
-            frontLayer.id = View.generateViewId()
-            frontLayer.cardElevation = 1F
 
-            // TODO: Get from ShapeAppearance.MaterialComponents.LargeComponent
-            frontLayer.shapeAppearanceModel =
-                ShapeAppearanceModel()
-                    .toBuilder()
-                    .setTopLeftCorner(CornerFamily.ROUNDED, 64F)
-                    .setTopRightCorner(CornerFamily.ROUNDED, 64F)
-                    .build()
-
-            frontLayer.requestLayout()
-
-            children.forEach {
-                this.removeView(it)
-                frontLayer.addView(it)
-            }
-
-            this.addView(frontLayer, 0)
-            frontLayer.requestLayout()
-        }
-        if (backLayer.parent == null) {
-
-            backLayer.layoutParams = LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            backLayer.id = View.generateViewId()
-
-            (backLayer.layoutParams as? CoordinatorLayout.LayoutParams)?.behavior =
-                ScrollingViewBehavior()
-
-            this.addView(backLayer, 0)
-        }
+        addFrontLayer()
+        addBackLayer()
 
         this.requestLayout()
 
@@ -135,6 +107,59 @@ class MaterialBackdrop @JvmOverloads constructor(
             slide(backViewHeight, animation)
         }
     }
+
+    private fun addBackLayer() {
+        if (backLayer.parent == null) {
+
+            backLayer.layoutParams = LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            backLayer.id = View.generateViewId()
+
+            (backLayer.layoutParams as? CoordinatorLayout.LayoutParams)?.behavior =
+                ScrollingViewBehavior()
+
+            this.addView(backLayer, 0)
+        }
+    }
+
+    private fun addFrontLayer() {
+        if (frontLayer.parent == null) {
+            frontLayer.layoutParams = LayoutParams(
+                LayoutParams.MATCH_PARENT,
+                LayoutParams.MATCH_PARENT
+            )
+            frontLayer.id = View.generateViewId()
+            frontLayer.cardElevation = 1F
+
+            // TODO: Get from ShapeAppearance.MaterialComponents.LargeComponent
+            frontLayer.shapeAppearanceModel =
+                ShapeAppearanceModel()
+                    .toBuilder()
+                    .setTopLeftCorner(CornerFamily.ROUNDED, 64F)
+                    .setTopRightCorner(CornerFamily.ROUNDED, 64F)
+                    .build()
+
+            if (showSubHeader) addSubHeader()
+
+            children.forEach {
+                this.removeView(it)
+                frontLayer.addView(it)
+            }
+
+            this.addView(frontLayer, 0)
+            frontLayer.requestLayout()
+        }
+    }
+
+    private fun addSubHeader() {
+        if (backLayer.parent == null) {
+            subHeader = View.inflate(context, R.layout.backdrop_sub_header, null)
+            frontLayer.addView(subHeader)
+        }
+    }
+
 
     private fun slide(position: Int, animation: Boolean = true) {
         ObjectAnimator.ofFloat(frontLayer, "translationY", position.toFloat())
@@ -291,4 +316,9 @@ class MaterialBackdrop @JvmOverloads constructor(
     }
 
     private enum class FadeType { IN, OUT }
+
+    private val Int.dp: Int
+        get() = (this / Resources.getSystem().displayMetrics.density).toInt()
+    private val Int.px: Int
+        get() = (this * Resources.getSystem().displayMetrics.density).toInt()
 }
