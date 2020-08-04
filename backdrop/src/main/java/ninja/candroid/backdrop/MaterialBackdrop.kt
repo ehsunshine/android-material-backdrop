@@ -6,9 +6,10 @@ import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Context
 import android.content.res.Resources
+import android.graphics.Color
+import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.util.DisplayMetrics
-import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver.OnGlobalLayoutListener
@@ -18,14 +19,10 @@ import android.view.animation.AnimationSet
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.LinearLayout
-import androidx.annotation.ColorInt
-import androidx.appcompat.widget.Toolbar
+import android.widget.TextView
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.children
-import androidx.fragment.app.FragmentContainerView
 import androidx.navigation.NavController
-import androidx.navigation.findNavController
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.AppBarLayout.ScrollingViewBehavior
 import com.google.android.material.card.MaterialCardView
@@ -34,6 +31,7 @@ import com.google.android.material.shape.ShapeAppearanceModel
 import com.google.android.material.textview.MaterialTextView
 import ninja.candroid.backdrop.extensions.toolbar
 import ninja.candroid.backdrop.extensions.topLevelDestinations
+import ninja.candroid.backdrop.utils.ViewFinderUtils
 
 class MaterialBackdrop @JvmOverloads constructor(
     context: Context,
@@ -41,16 +39,49 @@ class MaterialBackdrop @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
+    private val viewFinderUtils = ViewFinderUtils()
     private var navController: NavController? = null
-    private val animateHeight: Int
+    private val screenHeight: Int
     private var backdropShown = false
     private var navigationMenuId: Int = View.generateViewId()
+    private val scrim = MaterialCardView(context)
     private val navigationIcon = BackdropStateDrawable(context)
     private val backLayer = FrameLayout(context)
     private val frontLayer = MaterialCardView(context)
     private var subHeader = View(context)
+    private var frontLayerShape: ShapeAppearanceModel
 
+    var subHeaderIcon: Drawable? = context.getDrawable(R.drawable.backdrop_ic_up)
+        set(value) {
+            if (!showSubHeaderIcon) showSubHeaderIcon = true
+            field = value
+        }
     var showSubHeader: Boolean = true
+        set(value) {
+            subHeader.visibility = if (value) View.VISIBLE else View.GONE
+            field = value
+        }
+    var showSubHeaderIcon: Boolean = true
+        set(value) {
+            subHeader.apply {
+                findViewById<ImageView>(R.id.backdropSubHeaderIconImageView)?.visibility =
+                    if (value) View.VISIBLE else View.GONE
+            }
+            field = value
+        }
+
+    // TODO: Get from ShapeAppearance.MaterialComponents.LargeComponent
+    var cornerFamily: Int = CornerFamily.ROUNDED
+    var cornerSize: Float = 44F
+
+    var subHeaderTitle: String? = ""
+        set(value) {
+            if (!showSubHeader) showSubHeader = true
+            subHeader.apply {
+                findViewById<TextView>(R.id.backdropSubHeaderTitleTextView)?.text = value
+            }
+            field = value
+        }
 
     private val topLevelDestination: Boolean
         get() = topLevelDestinations.isNotEmpty() &&
@@ -59,20 +90,56 @@ class MaterialBackdrop @JvmOverloads constructor(
     init {
         val displayMetrics = DisplayMetrics()
         (context as Activity).windowManager.defaultDisplay.getMetrics(displayMetrics)
-        animateHeight = displayMetrics.heightPixels
+        screenHeight = displayMetrics.heightPixels
+        frontLayerShape = ShapeAppearanceModel()
+            .toBuilder()
+            .setTopLeftCorner(cornerFamily, cornerSize)
+            .setTopRightCorner(cornerFamily, cornerSize)
+            .build()
+        addFrontLayer()
+        addBackLayer()
+        addSubHeader()
+
+        attrs?.let {
+            val typedArray = context.obtainStyledAttributes(it, R.styleable.MaterialBackdrop, 0, 0)
+            subHeaderTitle = typedArray.getString(R.styleable.MaterialBackdrop_sub_header_title)
+            showSubHeader =
+                typedArray.getBoolean(R.styleable.MaterialBackdrop_show_sub_header, true)
+            showSubHeaderIcon =
+                typedArray.getBoolean(R.styleable.MaterialBackdrop_show_sub_header_icon, true)
+            subHeaderIcon = typedArray.getDrawable(R.styleable.MaterialBackdrop_sub_header_icon)
+                ?: subHeaderIcon
+            typedArray.recycle()
+        }
+
+    }
+
+    @JvmOverloads
+    fun open(view: View? = null, animation: Boolean = true, fullOpen: Boolean = false) {
+        backdropShown = true
+        addBackLayerChild(view) { backViewHeight ->
+            slide(backViewHeight, animation, fullOpen)
+        }
+    }
+
+    @JvmOverloads
+    fun close(animation: Boolean = true) {
+        if (backdropShown) {
+            backdropShown = false
+            slide(0, animation)
+        }
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
 
-        addFrontLayer()
-        addBackLayer()
+        populateFrontLayer()
 
         this.requestLayout()
 
-        navController = findNavController(this)
+        navController = viewFinderUtils.findNavController(this)
 
-        toolbar = toolbar ?: findToolbar()
+        toolbar = toolbar ?: viewFinderUtils.findToolbar(this)
 
         setAppBarElevationToZero()
 
@@ -83,7 +150,7 @@ class MaterialBackdrop @JvmOverloads constructor(
                 backdropShown = !backdropShown
 
                 if (backdropShown) {
-                    addBackLayer { backViewHeight ->
+                    addBackLayerChild { backViewHeight ->
                         slide(backViewHeight)
                     }
                 } else {
@@ -98,14 +165,6 @@ class MaterialBackdrop @JvmOverloads constructor(
     override fun onViewRemoved(child: View?) {
         super.onViewRemoved(child)
         toolbar = null
-    }
-
-    @JvmOverloads
-    fun open(view: View? = null, animation: Boolean = true) {
-        backdropShown = true
-        addBackLayer(view) { backViewHeight ->
-            slide(backViewHeight, animation)
-        }
     }
 
     private fun addBackLayer() {
@@ -133,36 +192,42 @@ class MaterialBackdrop @JvmOverloads constructor(
             frontLayer.id = View.generateViewId()
             frontLayer.cardElevation = 1F
 
-            // TODO: Get from ShapeAppearance.MaterialComponents.LargeComponent
-            frontLayer.shapeAppearanceModel =
-                ShapeAppearanceModel()
-                    .toBuilder()
-                    .setTopLeftCorner(CornerFamily.ROUNDED, 64F)
-                    .setTopRightCorner(CornerFamily.ROUNDED, 64F)
-                    .build()
-
-            if (showSubHeader) addSubHeader()
-
-            children.forEach {
-                this.removeView(it)
-                frontLayer.addView(it)
-            }
+            frontLayer.shapeAppearanceModel = frontLayerShape
 
             this.addView(frontLayer, 0)
             frontLayer.requestLayout()
         }
     }
 
-    private fun addSubHeader() {
-        if (backLayer.parent == null) {
-            subHeader = View.inflate(context, R.layout.backdrop_sub_header, null)
-            frontLayer.addView(subHeader)
+    private fun populateFrontLayer() {
+        children.forEach {
+            if (it != backLayer && it != frontLayer) {
+                this.removeView(it)
+                frontLayer.addView(it)
+            }
         }
     }
 
+    private fun addSubHeader() {
+        subHeader = View.inflate(context, R.layout.backdrop_sub_header, null)
+        frontLayer.addView(subHeader)
+    }
 
-    private fun slide(position: Int, animation: Boolean = true) {
-        ObjectAnimator.ofFloat(frontLayer, "translationY", position.toFloat())
+    private fun slide(position: Int, animation: Boolean = true, fullOpen: Boolean = false) {
+        val toolbarPosition = IntArray(2)
+        val toolBarHeight = toolbar?.layoutParams?.height ?: 0
+        applyScrim(fullOpen)
+        updateSubHeaderIcon()
+        toolbar?.getLocationOnScreen(toolbarPosition)
+        val subHeaderHeight =
+            context.resources.getDimensionPixelSize(R.dimen.backdrop_subheader_height)
+        ObjectAnimator.ofFloat(
+            frontLayer,
+            "translationY",
+            if (!fullOpen)
+                position.toFloat()
+            else (screenHeight - (subHeaderHeight + toolBarHeight + toolbarPosition[1])).toFloat()
+        )
             .apply {
                 removeAllListeners()
                 end()
@@ -172,6 +237,41 @@ class MaterialBackdrop @JvmOverloads constructor(
                 if (animation) start()
             }
         updateIcon(animation)
+    }
+
+    private fun updateSubHeaderIcon() {
+        val subHeaderImageView =
+            subHeader.findViewById<ImageView>(R.id.backdropSubHeaderIconImageView)
+        subHeaderImageView.setImageDrawable(subHeaderIcon)
+        subHeaderImageView?.visibility =
+            if (showSubHeaderIcon && backdropShown) View.VISIBLE else View.GONE
+    }
+
+    private fun applyScrim(fullOpen: Boolean) {
+        frontLayer.removeView(scrim)
+
+        if (backdropShown.not()) return
+
+        scrim.layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+
+        scrim.shapeAppearanceModel = frontLayerShape
+
+        scrim.setOnClickListener {
+            if (backdropShown) {
+                backdropShown = false
+                slide(0)
+            }
+        }
+        if (fullOpen.not()) {
+            scrim.setCardBackgroundColor(context.getColor(R.color.backdrop_scrim_color))
+        } else {
+            scrim.setCardBackgroundColor(Color.TRANSPARENT)
+        }
+        scrim.elevation = 0f
+        frontLayer.addView(scrim)
     }
 
     private fun setAppBarElevationToZero() {
@@ -196,7 +296,7 @@ class MaterialBackdrop @JvmOverloads constructor(
         navigationIcon.shape = if (topLevelDestination) {
             BackdropStateDrawable.Shape.ARROW_CLOSE
         } else {
-           BackdropStateDrawable.Shape.HAMBURGER_CLOSE
+            BackdropStateDrawable.Shape.HAMBURGER_CLOSE
         }
 
         val (start, end) = if (backdropShown) 0F to 1F else 1F to 0F
@@ -209,9 +309,10 @@ class MaterialBackdrop @JvmOverloads constructor(
         }
     }
 
-    private fun addBackLayer(view: View? = null, onHeightMeasured: (height: Int) -> Unit) {
+    private fun addBackLayerChild(view: View? = null, onHeightMeasured: (height: Int) -> Unit) {
         backLayer.clearAnimation()
         backLayer.removeAllViews()
+        // TODO: Add the navigation menu here as the default back layer child
         val backLayerChild = view
             ?: MaterialTextView(context).apply {
                 id = navigationMenuId
@@ -235,30 +336,6 @@ class MaterialBackdrop @JvmOverloads constructor(
             })
     }
 
-    private fun findNavController(view: ViewGroup): NavController? {
-        if (view.childCount != 0) {
-            view.children.forEach {
-                if (it is FragmentContainerView) {
-                    try {
-                        return it.findNavController()
-                    } catch (ex: IllegalStateException) {
-                        (it as? ViewGroup)?.let { viewGroup ->
-                            val navController = findNavController(viewGroup)
-                            if (navController == null) return@forEach else return navController
-                        }
-                    }
-
-                } else {
-                    (it as? ViewGroup)?.let { viewGroup ->
-                        val navController = findNavController(viewGroup)
-                        if (navController == null) return@forEach else return navController
-                    }
-                }
-            }
-        }
-        return null
-    }
-
     private fun fadeBackLayer(fadeType: FadeType) {
         backLayer.clearAnimation()
         val fade = when (fadeType) {
@@ -278,47 +355,10 @@ class MaterialBackdrop @JvmOverloads constructor(
         }
     }
 
-    private fun findToolbar(): Toolbar? {
-
-        fun findToolbarInChildren(view: ViewGroup): Toolbar? {
-            if (view.childCount != 0) {
-                view.children.forEach {
-                    if (it is Toolbar) {
-                        return it
-                    } else (it as? ViewGroup)?.let { viewGroup ->
-                        val toolbar = findToolbarInChildren(viewGroup)
-                        if (toolbar == null) return@forEach else return toolbar
-                    }
-                }
-            }
-            return null
-        }
-
-        var view = parent as? ViewGroup
-        do {
-            view?.children?.forEach {
-                if (it is Toolbar) return it else {
-                    val toolbar = (it as? ViewGroup)?.let { viewGroup ->
-                        findToolbarInChildren(viewGroup)
-                    }
-                    if (toolbar != null) return toolbar
-                }
-            }
-            view = view?.parent as? ViewGroup
-
-        } while (view?.parent != null)
-        return null
-    }
-
     companion object {
         private const val ANIMATION_SPEED = 150L
         private const val NAV_ICON_ANIMATION_SPEED = 300L
     }
 
     private enum class FadeType { IN, OUT }
-
-    private val Int.dp: Int
-        get() = (this / Resources.getSystem().displayMetrics.density).toInt()
-    private val Int.px: Int
-        get() = (this * Resources.getSystem().displayMetrics.density).toInt()
 }

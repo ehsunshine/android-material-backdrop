@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="MaterialBackdrop">
+        <attr name="show_sub_header" format="boolean" />
+        <attr name="sub_header_title" format="string" />
+        <attr name="show_sub_header_icon" format="boolean" />
+        <attr name="sub_header_icon" format="reference" />
+    </declare-styleable>
+</resources>

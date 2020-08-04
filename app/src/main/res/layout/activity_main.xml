@@ -29,6 +29,9 @@
             android:id="@+id/product_grid"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            app:sub_header_title="Subheader"
+            app:show_sub_header="true"
+            app:show_sub_header_icon="false"
             app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
             <fragment

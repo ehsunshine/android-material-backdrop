@@ -39,11 +39,11 @@ class MainActivity : AppCompatActivity() {
             params.setMargins(margin, margin, margin, margin)
             layoutParams = params
             text = "Open with no animation"
-        }, false)
+        }, animation = false)
 
-        findViewById<FloatingActionButton>(R.id.fab).setOnClickListener { view ->
-            Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                .setAction("Action", null).show()
+        findViewById<FloatingActionButton>(R.id.fab).setOnClickListener {
+            product_grid.subHeaderTitle = "Closed"
+            product_grid.close(true)
         }
     }
 
@@ -60,7 +60,8 @@ class MainActivity : AppCompatActivity() {
         return when (item.itemId) {
             R.id.action_settings -> {
                 val view = layoutInflater.inflate(R.layout.content_main, null)
-                product_grid.open(view, true)
+                product_grid.open(view, true, fullOpen = true)
+                product_grid.showSubHeaderIcon = true
                 true
             }
             else -> super.onOptionsItemSelected(item)
