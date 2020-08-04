@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared -->
+    <color name="colorOnPrimary">#FFFFFF</color>
+    <color name="colorOnSecondary">#FFFFFF</color>
+    <color name="colorNavBar">@android:color/transparent</color>
+    <color name="colorError">#F44336</color>
+    <color name="colorOnError">#FFFFFF</color>
+
+    <!-- Light -->
+    <color name="colorToolbarOnPrimaryLight">#98000000</color>
+    <color name="colorMainContentLight">#FFFFFF</color>
+
+    <color name="colorPrimaryCyan">#4fc3f7</color>
+    <color name="colorPrimaryVariantCyan">#0093c4</color>
+    <color name="colorSecondaryCyan">@color/colorPrimaryCyan</color>
+
+    <color name="colorPrimaryOrange">#f48032</color>
+    <color name="colorPrimaryVariantOrange">#bb5100</color>
+    <color name="colorSecondaryOrange">@color/colorPrimaryOrange</color>
+
+
+    <!-- Dark -->
+    <color name="colorToolbarOnPrimaryDark">#C0FFFFFF</color>
+    <color name="colorMainContentDark">#111111</color>
+    <color name="colorSecondaryVariantDark">#343434</color>
+
+
+</resources>

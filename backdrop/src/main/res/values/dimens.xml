@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="backdrop_subheader_space_normal">16dp</dimen>
+    <dimen name="backdrop_subheader_space_small">12dp</dimen>
+    <dimen name="backdrop_subheader_height">44dp</dimen>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Widget.AppTheme.Toolbar" parent="Widget.MaterialComponents.Toolbar.Primary">
+        <item name="materialThemeOverlay">@style/ThemeOverlay.AppTheme.Toolbar</item>
+        <item name="popupTheme">@style/ThemeOverlay.AppCompat.Dark</item>
+    </style>
+
+    <style name="ThemeOverlay.AppTheme.Toolbar" parent="">
+        <item name="colorPrimary">@color/colorMainContentDark</item>
+        <item name="colorOnPrimary">@color/colorToolbarOnPrimaryDark</item>
+    </style>
+
+</resources>
